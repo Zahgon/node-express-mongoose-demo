@@ -5,8 +5,8 @@
  */
 
 const mongoose = require('mongoose');
-const { wrap: async } = require('co');
 const only = require('only');
+const { redirect } = require('../../config/response');
 const Article = mongoose.model('Article');
 const assign = Object.assign;
 
@@ -14,23 +14,19 @@ const assign = Object.assign;
  * Load
  */
 
-exports.load = async(function*(req, res, next, id) {
-  try {
-    req.article = yield Article.load(id);
-    if (!req.article) return next(new Error('Article not found'));
-  } catch (err) {
-    return next(err);
-  }
-  next();
-});
+exports.load = async function(id, ctx, next) {
+  ctx.state.article = await Article.load(id);
+  if (!ctx.state.article) throw new Error('Article not found');
+  return next();
+};
 
 /**
  * List
  */
 
-exports.index = async(function*(req, res) {
-  const page = (req.query.page > 0 ? req.query.page : 1) - 1;
-  const _id = req.query.item;
+exports.index = async function(ctx) {
+  const page = (ctx.query.page > 0 ? ctx.query.page : 1) - 1;
+  const _id = ctx.query.item;
   const limit = 15;
   const options = {
     limit: limit,
@@ -39,23 +35,23 @@ exports.index = async(function*(req, res) {
 
   if (_id) options.criteria = { _id };
 
-  const articles = yield Article.list(options);
-  const count = yield Article.countDocuments();
+  const articles = await Article.list(options);
+  const count = await Article.countDocuments();
 
-  res.render('articles/index', {
+  await ctx.render('articles/index', {
     title: 'Articles',
     articles: articles,
     page: page + 1,
     pages: Math.ceil(count / limit)
   });
-});
+};
 
 /**
  * New article
  */
 
-exports.new = function(req, res) {
-  res.render('articles/new', {
+exports.new = async function(ctx) {
+  await ctx.render('articles/new', {
     title: 'New Article',
     article: new Article()
   });
@@ -65,30 +61,31 @@ exports.new = function(req, res) {
  * Create an article
  */
 
-exports.create = async(function*(req, res) {
-  const article = new Article(only(req.body, 'title body tags'));
-  article.user = req.user;
+exports.create = async function(ctx) {
+  const article = new Article(only(ctx.request.body, 'title body tags'));
+  article.user = ctx.state.user;
   try {
-    yield article.uploadAndSave(req.file);
-    req.flash('success', 'Successfully created article!');
-    res.redirect(`/articles/${article._id}`);
+    await article.uploadAndSave();
+    ctx.flash('success', 'Successfully created article!');
+    redirect(ctx, `/articles/${article._id}`);
   } catch (err) {
-    res.status(422).render('articles/new', {
+    ctx.status = 422;
+    await ctx.render('articles/new', {
       title: article.title || 'New Article',
       errors: [err.toString()],
       article
     });
   }
-});
+};
 
 /**
  * Edit an article
  */
 
-exports.edit = function(req, res) {
-  res.render('articles/edit', {
-    title: 'Edit ' + req.article.title,
-    article: req.article
+exports.edit = async function(ctx) {
+  await ctx.render('articles/edit', {
+    title: 'Edit ' + ctx.state.article.title,
+    article: ctx.state.article
   });
 };
 
@@ -96,29 +93,30 @@ exports.edit = function(req, res) {
  * Update article
  */
 
-exports.update = async(function*(req, res) {
-  const article = req.article;
-  assign(article, only(req.body, 'title body tags'));
+exports.update = async function(ctx) {
+  const article = ctx.state.article;
+  assign(article, only(ctx.request.body, 'title body tags'));
   try {
-    yield article.uploadAndSave(req.file);
-    res.redirect(`/articles/${article._id}`);
+    await article.uploadAndSave();
+    redirect(ctx, `/articles/${article._id}`);
   } catch (err) {
-    res.status(422).render('articles/edit', {
+    ctx.status = 422;
+    await ctx.render('articles/edit', {
       title: 'Edit ' + article.title,
       errors: [err.toString()],
       article
     });
   }
-});
+};
 
 /**
  * Show
  */
 
-exports.show = function(req, res) {
-  res.render('articles/show', {
-    title: req.article.title,
-    article: req.article
+exports.show = async function(ctx) {
+  await ctx.render('articles/show', {
+    title: ctx.state.article.title,
+    article: ctx.state.article
   });
 };
 
@@ -126,8 +124,8 @@ exports.show = function(req, res) {
  * Delete an article
  */
 
-exports.destroy = async(function*(req, res) {
-  yield req.article.remove();
-  req.flash('info', 'Deleted successfully');
-  res.redirect('/articles');
-});
+exports.destroy = async function(ctx) {
+  await ctx.state.article.remove();
+  ctx.flash('info', 'Deleted successfully');
+  redirect(ctx, '/articles');
+};

@@ -5,16 +5,15 @@
  */
 
 const mongoose = require('mongoose');
-const { wrap: async } = require('co');
 const Article = mongoose.model('Article');
 
 /**
  * List items tagged with a tag
  */
 
-exports.index = async(function*(req, res) {
-  const criteria = { tags: req.params.tag };
-  const page = (req.params.page > 0 ? req.params.page : 1) - 1;
+exports.index = async function(ctx) {
+  const criteria = { tags: ctx.params.tag };
+  const page = (ctx.params.page > 0 ? ctx.params.page : 1) - 1;
   const limit = 30;
   const options = {
     limit: limit,
@@ -22,13 +21,13 @@ exports.index = async(function*(req, res) {
     criteria: criteria
   };
 
-  const articles = yield Article.list(options);
-  const count = yield Article.countDocuments(criteria);
+  const articles = await Article.list(options);
+  const count = await Article.countDocuments(criteria);
 
-  res.render('articles/index', {
-    title: 'Articles tagged ' + req.params.tag,
+  await ctx.render('articles/index', {
+    title: 'Articles tagged ' + ctx.params.tag,
     articles: articles,
     page: page + 1,
     pages: Math.ceil(count / limit)
   });
-});
+};

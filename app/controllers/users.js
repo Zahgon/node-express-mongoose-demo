@@ -5,63 +5,57 @@
  */
 
 const mongoose = require('mongoose');
-const { wrap: async } = require('co');
+const { redirect } = require('../../config/response');
 const User = mongoose.model('User');
 
 /**
  * Load
  */
 
-exports.load = async(function*(req, res, next, _id) {
+exports.load = async function(_id, ctx, next) {
   const criteria = { _id };
-  try {
-    req.profile = yield User.load({ criteria });
-    if (!req.profile) return next(new Error('User not found'));
-  } catch (err) {
-    return next(err);
-  }
-  next();
-});
+  ctx.state.profile = await User.load({ criteria });
+  if (!ctx.state.profile) throw new Error('User not found');
+  return next();
+};
 
 /**
  * Create user
  */
 
-exports.create = async(function*(req, res) {
-  const user = new User(req.body);
+exports.create = async function(ctx) {
+  const user = new User(ctx.request.body);
   user.provider = 'local';
   try {
-    yield user.save();
-    req.logIn(user, err => {
-      if (err) req.flash('info', 'Sorry! We are not able to log you in!');
-      res.redirect('/');
-    });
+    await user.save();
+    await ctx.login(user);
+    redirect(ctx, '/');
   } catch (err) {
     const errors = Object.keys(err.errors).map(
       field => err.errors[field].message
     );
 
-    res.render('users/signup', {
+    await ctx.render('users/signup', {
       title: 'Sign up',
       errors,
       user
     });
   }
-});
+};
 
 /**
  *  Show profile
  */
 
-exports.show = function(req, res) {
-  const user = req.profile;
-  res.render('users/show', {
+exports.show = async function(ctx) {
+  const user = ctx.state.profile;
+  await ctx.render('users/show', {
     title: user.name,
     user: user
   });
 };
 
-exports.signin = function() {};
+exports.signin = async function() {};
 
 /**
  * Auth callback
@@ -73,8 +67,8 @@ exports.authCallback = login;
  * Show login form
  */
 
-exports.login = function(req, res) {
-  res.render('users/login', {
+exports.login = async function(ctx) {
+  await ctx.render('users/login', {
     title: 'Login'
   });
 };
@@ -83,8 +77,8 @@ exports.login = function(req, res) {
  * Show sign up form
  */
 
-exports.signup = function(req, res) {
-  res.render('users/signup', {
+exports.signup = async function(ctx) {
+  await ctx.render('users/signup', {
     title: 'Sign up',
     user: new User()
   });
@@ -94,9 +88,9 @@ exports.signup = function(req, res) {
  * Logout
  */
 
-exports.logout = function(req, res) {
-  req.logout();
-  res.redirect('/login');
+exports.logout = async function(ctx) {
+  ctx.logout();
+  redirect(ctx, '/login');
 };
 
 /**
@@ -109,8 +103,8 @@ exports.session = login;
  * Login
  */
 
-function login(req, res) {
-  const redirectTo = req.session.returnTo ? req.session.returnTo : '/';
-  delete req.session.returnTo;
-  res.redirect(redirectTo);
+async function login(ctx) {
+  const redirectTo = ctx.session.returnTo ? ctx.session.returnTo : '/';
+  delete ctx.session.returnTo;
+  redirect(ctx, redirectTo);
 }

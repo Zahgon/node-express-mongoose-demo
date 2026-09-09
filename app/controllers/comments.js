@@ -4,35 +4,37 @@
  * Module dependencies.
  */
 
-const { wrap: async } = require('co');
+const { redirect } = require('../../config/response');
 
 /**
  * Load comment
  */
 
-exports.load = function(req, res, next, id) {
-  req.comment = req.article.comments.find(comment => comment.id === id);
+exports.load = async function(id, ctx, next) {
+  ctx.state.comment = ctx.state.article.comments.find(
+    comment => comment.id === id
+  );
 
-  if (!req.comment) return next(new Error('Comment not found'));
-  next();
+  if (!ctx.state.comment) throw new Error('Comment not found');
+  return next();
 };
 
 /**
  * Create comment
  */
 
-exports.create = async(function*(req, res) {
-  const article = req.article;
-  yield article.addComment(req.user, req.body);
-  res.redirect(`/articles/${article._id}`);
-});
+exports.create = async function(ctx) {
+  const article = ctx.state.article;
+  await article.addComment(ctx.state.user, ctx.request.body);
+  redirect(ctx, `/articles/${article._id}`);
+};
 
 /**
  * Delete comment
  */
 
-exports.destroy = async(function*(req, res) {
-  yield req.article.removeComment(req.params.commentId);
-  req.flash('info', 'Removed comment');
-  res.redirect(`/articles/${req.article.id}`);
-});
+exports.destroy = async function(ctx) {
+  await ctx.state.article.removeComment(ctx.params.commentId);
+  ctx.flash('info', 'Removed comment');
+  redirect(ctx, `/articles/${ctx.state.article.id}`);
+};
